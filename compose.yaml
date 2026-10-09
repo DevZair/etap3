@@ -1,0 +1,53 @@
+services:
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://task_user:devops_local_password@db:5432/tasks_db
+      REDIS_URL: redis://redis:6379/0
+      CACHE_TTL_SECONDS: "30"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+asyncpg://task_user:devops_local_password@db:5432/tasks_db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: task_user
+      POSTGRES_PASSWORD: devops_local_password
+      POSTGRES_DB: tasks_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U task_user -d tasks_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:
